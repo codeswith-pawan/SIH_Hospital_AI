@@ -37,12 +37,14 @@ SYMPTOMS = [
     "Body Pain",
     "Chills",
     "Swelling",
-    "Neck Pain"
+    "Neck Pain",
+    "Low Blood Pressure",
+    "Confusion"
 ]
 
-# -------------------------------
+# --------------------------------
 # Diseases
-# -------------------------------
+# --------------------------------
 
 DISEASES = [
     "Viral Fever",
@@ -65,32 +67,260 @@ DISEASES = [
     "Sepsis"
 ]
 
+
+# --------------------------------
+# Disease -> Common Symptoms
+# --------------------------------
+
 DISEASE_SYMPTOMS = {
 
-"Heart Attack":[
-    "Chest Pain",
-    "Shortness of Breath",
-    "Palpitations",
-    "Fatigue"
-],
+    "Viral Fever": [
+        "High Fever",
+        "Body Pain",
+        "Fatigue",
+        "Chills",
+        "Headache"
+    ],
 
-"Stroke":[
-    "Speech Difficulty",
-    "Weakness",
-    "Vision Loss"
-],
+    "Pneumonia": [
+        "Cough",
+        "High Fever",
+        "Shortness of Breath",
+        "Low Oxygen",
+        "Fatigue"
+    ],
 
-"Pneumonia":[
-    "Cough",
-    "High Fever",
-    "Low Oxygen"
-],
+    "Asthma": [
+        "Shortness of Breath",
+        "Cough",
+        "Chest Pain",
+        "Fatigue"
+    ],
 
-"Dengue":[
-    "High Fever",
-    "Body Pain",
-    "Vomiting"
-]
+    "COPD": [
+        "Shortness of Breath",
+        "Cough",
+        "Fatigue",
+        "Low Oxygen"
+    ],
+
+    "Hypertension": [
+        "Headache",
+        "Dizziness",
+        "Fatigue"
+    ],
+
+    "Diabetes": [
+        "Fatigue",
+        "Weakness",
+        "Dizziness",
+        "Swelling"
+    ],
+
+    "Heart Attack": [
+        "Chest Pain",
+        "Shortness of Breath",
+        "Palpitations",
+        "Fatigue",
+        "Dizziness"
+    ],
+
+    "Stroke": [
+        "Speech Difficulty",
+        "Weakness",
+        "Vision Loss",
+        "Dizziness",
+        "Loss of Consciousness"
+    ],
+
+    "Kidney Failure": [
+        "Swelling",
+        "Fatigue",
+        "Weakness",
+        "Nausea",
+        "Shortness of Breath"
+    ],
+
+    "Food Poisoning": [
+        "Vomiting",
+        "Diarrhea",
+        "Abdominal Pain",
+        "Nausea",
+        "Weakness"
+    ],
+
+    "Dengue": [
+        "High Fever",
+        "Body Pain",
+        "Vomiting",
+        "Headache",
+        "Fatigue"
+    ],
+
+    "Malaria": [
+        "High Fever",
+        "Chills",
+        "Headache",
+        "Body Pain",
+        "Fatigue"
+    ],
+
+    "COVID-like Infection": [
+        "Cough",
+        "High Fever",
+        "Shortness of Breath",
+        "Fatigue",
+        "Low Oxygen"
+    ],
+
+    "Trauma": [
+        "Road Accident",
+        "Bleeding",
+        "Fracture",
+        "Loss of Consciousness",
+        "Body Pain"
+    ],
+
+    "Burn Injury": [
+        "Burn Injury",
+        "Bleeding",
+        "Body Pain"
+    ],
+
+    "Fracture": [
+        "Fracture",
+        "Joint Pain",
+        "Swelling",
+        "Body Pain"
+    ],
+
+    "Appendicitis": [
+        "Abdominal Pain",
+        "Vomiting",
+        "Nausea",
+        "High Fever"
+    ],
+
+    "Sepsis": [
+        "High Fever",
+        "Low Blood Pressure",
+        "Weakness",
+        "Confusion",
+        "Shortness of Breath"
+    ]
+}
+
+# ----------------------------------------
+# Disease -> Required Tests
+# ----------------------------------------
+
+DISEASE_REQUIRED_TESTS = {
+
+    "Heart Attack": [
+        "ECG",
+        "Blood Test",
+        "Troponin Test"
+    ],
+
+    "Stroke": [
+        "CT Scan",
+        "MRI",
+        "Blood Test"
+    ],
+
+    "Pneumonia": [
+        "Chest X-Ray",
+        "Blood Test",
+        "Oxygen Assessment"
+    ],
+
+    "Asthma": [
+        "Chest X-Ray",
+        "Oxygen Assessment",
+        "Pulmonary Function Test"
+    ],
+
+    "COPD": [
+        "Chest X-Ray",
+        "Oxygen Assessment",
+        "Pulmonary Function Test"
+    ],
+
+    "Hypertension": [
+        "Blood Pressure Test",
+        "Blood Test",
+        "ECG"
+    ],
+
+    "Diabetes": [
+        "Blood Glucose Test",
+        "HbA1c Test",
+        "Kidney Function Test"
+    ],
+
+    "Kidney Failure": [
+        "Kidney Function Test",
+        "Blood Test",
+        "Ultrasound",
+        "Dialysis"
+    ],
+
+    "Food Poisoning": [
+        "Blood Test",
+        "Stool Test"
+    ],
+
+    "Dengue": [
+        "CBC",
+        "Dengue NS1 Test",
+        "Blood Test"
+    ],
+
+    "Malaria": [
+        "Malaria Test",
+        "CBC",
+        "Blood Test"
+    ],
+
+    "COVID-like Infection": [
+        "Chest X-Ray",
+        "Oxygen Assessment",
+        "Blood Test"
+    ],
+
+    "Trauma": [
+        "X-Ray",
+        "CT Scan",
+        "Blood Test"
+    ],
+
+    "Burn Injury": [
+        "Blood Test",
+        "X-Ray"
+    ],
+
+    "Fracture": [
+        "X-Ray",
+        "CT Scan"
+    ],
+
+    "Appendicitis": [
+        "Ultrasound",
+        "Blood Test",
+        "CT Scan"
+    ],
+
+    "Sepsis": [
+        "Blood Test",
+        "CBC",
+        "Blood Culture",
+        "Lactate Test"
+    ],
+
+    "Viral Fever": [
+        "CBC",
+        "Blood Test"
+    ]
 }
 
 
@@ -177,19 +407,72 @@ ICU_REQUIRED = {
     "Viral Fever": False
 }
 
-
-
 # ----------------------------------------
 # Disease-wise Vital Ranges
 # ----------------------------------------
 
 DISEASE_VITALS = {
 
+    "Viral Fever": {
+        "spo2": (95, 100),
+        "heart_rate": (80, 120),
+        "systolic_bp": (100, 140),
+        "diastolic_bp": (65, 90),
+        "respiratory_rate": (16, 24),
+        "temperature": (99.5, 103.0)
+    },
+
+    "Pneumonia": {
+        "spo2": (88, 96),
+        "heart_rate": (90, 130),
+        "systolic_bp": (95, 150),
+        "diastolic_bp": (60, 95),
+        "respiratory_rate": (20, 32),
+        "temperature": (100.0, 104.0)
+    },
+
+    "Asthma": {
+        "spo2": (88, 96),
+        "heart_rate": (85, 125),
+        "systolic_bp": (100, 145),
+        "diastolic_bp": (65, 90),
+        "respiratory_rate": (20, 35),
+        "temperature": (97.0, 100.0)
+    },
+
+    "COPD": {
+        "spo2": (86, 95),
+        "heart_rate": (80, 120),
+        "systolic_bp": (100, 155),
+        "diastolic_bp": (65, 95),
+        "respiratory_rate": (20, 32),
+        "temperature": (97.0, 100.0)
+    },
+
+    "Hypertension": {
+        "spo2": (95, 100),
+        "heart_rate": (65, 105),
+        "systolic_bp": (145, 200),
+        "diastolic_bp": (90, 120),
+        "respiratory_rate": (14, 22),
+        "temperature": (97.0, 99.0)
+    },
+
+    "Diabetes": {
+        "spo2": (95, 100),
+        "heart_rate": (65, 105),
+        "systolic_bp": (110, 155),
+        "diastolic_bp": (70, 95),
+        "respiratory_rate": (14, 24),
+        "temperature": (97.0, 99.0)
+    },
+
     "Heart Attack": {
         "spo2": (78, 92),
         "heart_rate": (110, 160),
         "systolic_bp": (80, 180),
         "diastolic_bp": (50, 110),
+        "respiratory_rate": (22, 36),
         "temperature": (97.0, 100.0)
     },
 
@@ -198,15 +481,26 @@ DISEASE_VITALS = {
         "heart_rate": (70, 120),
         "systolic_bp": (150, 220),
         "diastolic_bp": (90, 130),
+        "respiratory_rate": (16, 30),
         "temperature": (97.0, 100.0)
     },
 
-    "Pneumonia": {
-        "spo2": (82, 94),
-        "heart_rate": (90, 130),
-        "systolic_bp": (95, 150),
-        "diastolic_bp": (60, 95),
-        "temperature": (100.0, 104.0)
+    "Kidney Failure": {
+        "spo2": (90, 98),
+        "heart_rate": (75, 115),
+        "systolic_bp": (120, 180),
+        "diastolic_bp": (75, 110),
+        "respiratory_rate": (18, 30),
+        "temperature": (97.0, 100.0)
+    },
+
+    "Food Poisoning": {
+        "spo2": (95, 100),
+        "heart_rate": (85, 125),
+        "systolic_bp": (90, 135),
+        "diastolic_bp": (55, 90),
+        "respiratory_rate": (16, 24),
+        "temperature": (98.5, 102.5)
     },
 
     "Dengue": {
@@ -214,41 +508,72 @@ DISEASE_VITALS = {
         "heart_rate": (90, 130),
         "systolic_bp": (85, 120),
         "diastolic_bp": (55, 80),
+        "respiratory_rate": (16, 26),
         "temperature": (101.0, 105.0)
     },
 
-    "Diabetes": {
-        "spo2": (95, 100),
-        "heart_rate": (65, 100),
-        "systolic_bp": (110, 150),
-        "diastolic_bp": (70, 95),
-        "temperature": (97.0, 99.0)
+    "Malaria": {
+        "spo2": (93, 99),
+        "heart_rate": (85, 130),
+        "systolic_bp": (90, 135),
+        "diastolic_bp": (55, 90),
+        "respiratory_rate": (16, 26),
+        "temperature": (100.0, 105.0)
     },
 
-    "Hypertension": {
-        "spo2": (95, 100),
-        "heart_rate": (65, 105),
-        "systolic_bp": (145, 200),
-        "diastolic_bp": (90, 120),
-        "temperature": (97.0, 99.0)
+    "COVID-like Infection": {
+        "spo2": (88, 97),
+        "heart_rate": (85, 130),
+        "systolic_bp": (95, 150),
+        "diastolic_bp": (60, 95),
+        "respiratory_rate": (20, 34),
+        "temperature": (99.0, 103.5)
     },
 
-    "Asthma": {
-        "spo2": (88, 96),
-        "heart_rate": (85, 120),
-        "systolic_bp": (100, 145),
-        "diastolic_bp": (65, 90),
+    "Trauma": {
+        "spo2": (85, 99),
+        "heart_rate": (90, 145),
+        "systolic_bp": (80, 150),
+        "diastolic_bp": (50, 100),
+        "respiratory_rate": (18, 32),
+        "temperature": (97.0, 101.0)
+    },
+
+    "Burn Injury": {
+        "spo2": (88, 99),
+        "heart_rate": (90, 145),
+        "systolic_bp": (85, 150),
+        "diastolic_bp": (55, 100),
+        "respiratory_rate": (18, 32),
+        "temperature": (97.0, 102.0)
+    },
+
+    "Fracture": {
+        "spo2": (94, 100),
+        "heart_rate": (70, 120),
+        "systolic_bp": (100, 150),
+        "diastolic_bp": (65, 95),
+        "respiratory_rate": (14, 24),
         "temperature": (97.0, 100.0)
     },
 
-    "Viral Fever": {
+    "Appendicitis": {
         "spo2": (95, 100),
-        "heart_rate": (80, 120),
-        "systolic_bp": (100, 140),
-        "diastolic_bp": (65, 90),
-        "temperature": (99.5, 103.0)
-    }
+        "heart_rate": (85, 125),
+        "systolic_bp": (95, 145),
+        "diastolic_bp": (60, 95),
+        "respiratory_rate": (16, 26),
+        "temperature": (99.0, 103.0)
+    },
 
+    "Sepsis": {
+        "spo2": (82, 96),
+        "heart_rate": (100, 160),
+        "systolic_bp": (70, 110),
+        "diastolic_bp": (40, 75),
+        "respiratory_rate": (22, 40),
+        "temperature": (96.0, 104.0)
+    }
 }
 
 # ----------------------------------------
