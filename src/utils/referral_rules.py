@@ -271,3 +271,186 @@ def check_hospital_eligibility(patient, hospital):
 
     return True
 
+# ----------------------------------------
+# Detailed Hospital Capability Assessment
+# ----------------------------------------
+
+def evaluate_hospital_capability(
+    patient,
+    hospital
+):
+    """
+    Detailed hospital capability assessment.
+
+    Returns:
+        eligible
+        hard_blocks
+        warnings
+        unavailable_tests
+        unavailable_specialties
+    """
+
+    hard_blocks = []
+    warnings = []
+
+    # --------------------------------
+    # Referral acceptance
+    # --------------------------------
+
+    if hospital["accepts_referral"] != "Yes":
+
+        hard_blocks.append(
+            "Hospital does not accept referrals"
+        )
+
+    # --------------------------------
+    # Required Tests
+    # --------------------------------
+
+    test_result = check_test_availability(
+        patient,
+        hospital
+    )
+
+    unavailable_tests = test_result[
+        "unavailable_tests"
+    ]
+
+    if unavailable_tests:
+
+        hard_blocks.append(
+            "Required tests unavailable: "
+            + ", ".join(unavailable_tests)
+        )
+
+    # --------------------------------
+    # Required Specialty
+    # --------------------------------
+
+    specialty_result = (
+        check_specialty_availability(
+            patient,
+            hospital
+        )
+    )
+
+    unavailable_specialties = (
+        specialty_result[
+            "unavailable_specialties"
+        ]
+    )
+
+    if unavailable_specialties:
+
+        hard_blocks.append(
+            "Required specialty unavailable: "
+            + ", ".join(
+                unavailable_specialties
+            )
+        )
+
+    # --------------------------------
+    # ICU
+    # --------------------------------
+
+    if patient["icu_required"] == "Yes":
+
+        if hospital["available_icu_beds"] <= 0:
+
+            hard_blocks.append(
+                "ICU bed unavailable"
+            )
+
+    # --------------------------------
+    # Critical Patient
+    # --------------------------------
+
+    if patient["priority"] == "Critical":
+
+        # Critical cases require emergency support
+        if hospital["emergency_24x7"] != "Yes":
+
+            hard_blocks.append(
+                "24x7 emergency service unavailable"
+            )
+
+        # Emergency bed
+        if hospital[
+            "available_emergency_beds"
+        ] <= 0:
+
+            hard_blocks.append(
+                "Emergency bed unavailable"
+            )
+
+    # --------------------------------
+    # Oxygen warning
+    # --------------------------------
+
+    try:
+
+        spo2 = float(
+            patient["spo2"]
+        )
+
+        if spo2 < 94:
+
+            if hospital[
+                "oxygen_support"
+            ] != "Yes":
+
+                hard_blocks.append(
+                    "Oxygen support unavailable"
+                )
+
+    except (
+        KeyError,
+        TypeError,
+        ValueError
+    ):
+
+        pass
+
+    # --------------------------------
+    # Ventilator warning / capability
+    # --------------------------------
+
+    if patient["priority"] == "Critical":
+
+        if hospital["ventilator"] != "Yes":
+
+            warnings.append(
+                "Ventilator support unavailable"
+            )
+
+    # --------------------------------
+    # Ambulance
+    # --------------------------------
+
+    if patient.get(
+        "ambulance_required"
+    ) == "Yes":
+
+        if hospital["ambulance"] != "Yes":
+
+            warnings.append(
+                "Hospital ambulance unavailable"
+            )
+
+    # --------------------------------
+    # Final decision
+    # --------------------------------
+
+    eligible = (
+        len(hard_blocks) == 0
+    )
+
+    return {
+        "eligible": eligible,
+        "hard_blocks": hard_blocks,
+        "warnings": warnings,
+        "unavailable_tests":
+            unavailable_tests,
+        "unavailable_specialties":
+            unavailable_specialties
+    }
