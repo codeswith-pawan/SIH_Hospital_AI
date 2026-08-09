@@ -110,15 +110,7 @@ def generate_referral(
     # Bed Match
     # ------------------------------------
 
-    if patient["icu_required"] == "Yes":
-
-        bed_match = (
-            1
-            if hospital["available_icu_beds"] > 0
-            else 0
-        )
-
-    elif patient["priority"] == "Critical":
+    if patient["priority"] == "Critical":
 
         bed_match = (
             1

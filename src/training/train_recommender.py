@@ -487,6 +487,50 @@ def train_ablation_model(
     }
 
 # ----------------------------------------
+# Run Ablation Experiments
+# ----------------------------------------
+
+ablation_results = []
+
+# Remove test_match
+ablation_results.append(
+    train_ablation_model(
+        X,
+        y,
+        ["test_match"],
+        "WITHOUT test_match"
+    )
+)
+
+# Remove test_match + specialty_match
+ablation_results.append(
+    train_ablation_model(
+        X,
+        y,
+        ["test_match", "specialty_match"],
+        "WITHOUT test_match + specialty_match"
+    )
+)
+
+# ----------------------------------------
+# Ablation Comparison
+# ----------------------------------------
+
+ablation_df = pd.DataFrame(
+    ablation_results
+)
+
+print("\n==============================")
+print("ABLATION COMPARISON")
+print("==============================")
+
+print(
+    ablation_df.to_string(
+        index=False
+    )
+)
+
+# ----------------------------------------
 # Cross Validation
 # ----------------------------------------
 
@@ -651,6 +695,24 @@ print(
 
 best_rf = search.best_estimator_
 
+# ----------------------------------------
+# Save Final Tuned Model
+# ----------------------------------------
+
+import joblib
+import os
+
+os.makedirs("models", exist_ok=True)
+
+model_path = "models/referral_success_model.joblib"
+
+joblib.dump(
+    best_rf,
+    model_path
+)
+
+print("\nFINAL MODEL SAVED")
+print("Path:", model_path)
 # ----------------------------------------
 # Final Tuned Model Evaluation
 # ----------------------------------------

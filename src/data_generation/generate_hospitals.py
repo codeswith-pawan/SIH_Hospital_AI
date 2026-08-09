@@ -101,9 +101,9 @@ def generate_hospital(index):
     )
 
     occupied_beds = random.randint(
-        int(total_beds * 0.30),
-        int(total_beds * 0.90)
-    )
+    int(total_beds * 0.50),
+    total_beds)
+
 
     hospital["total_beds"] = total_beds
 
@@ -123,9 +123,8 @@ def generate_hospital(index):
     )
 
     occupied_icu = random.randint(
-        int(icu_beds * 0.20),
-        int(icu_beds * 0.90)
-    )
+    int(icu_beds * 0.50),
+    icu_beds)
 
     hospital["icu_beds"] = icu_beds
 
@@ -143,10 +142,8 @@ def generate_hospital(index):
     )
 
     occupied_emergency = random.randint(
-        int(emergency_beds * 0.20),
-        int(emergency_beds * 0.85)
-    )
-
+    int(emergency_beds * 0.50),
+    emergency_beds)
     hospital["emergency_beds"] = emergency_beds
 
     hospital["available_emergency_beds"] = (
