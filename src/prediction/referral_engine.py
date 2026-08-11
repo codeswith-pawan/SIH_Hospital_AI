@@ -142,7 +142,8 @@ def find_eligible_hospitals(
 
 def reserve_best_hospital(
     patient,
-    hospitals
+    hospitals,
+    hospital_id=None
 ):
     """
     Find ranked eligible hospitals and attempt
@@ -161,6 +162,20 @@ def reserve_best_hospital(
         patient,
         hospitals
     )
+    if hospital_id is not None:
+        ranked_hospitals = ranked_hospitals[
+            ranked_hospitals["hospital_id"] == hospital_id
+        ]
+
+        if ranked_hospitals.empty:
+            return {
+                "success": False,
+                "status": "HOSPITAL_NOT_ELIGIBLE",
+                "message": "Selected hospital is not eligible for this patient.",
+                "hospital": None,
+                "reservation": None,
+                "attempts": [],
+            }
 
     if ranked_hospitals.empty:
 

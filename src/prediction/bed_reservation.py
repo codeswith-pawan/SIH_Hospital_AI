@@ -92,9 +92,10 @@ def reserve_bed(
     inventory
 ):
     """
-    Reserve GENERAL or ICU bed.
+    Reserve a GENERAL or ICU bed.
 
-    Reservation is persisted to disk.
+    Assigns a real physical bed number
+    such as GENERAL-001 or ICU-004.
     """
 
     with RESERVATION_LOCK:
@@ -102,6 +103,8 @@ def reserve_bed(
         # ----------------------------------------
         # Validate bed type
         # ----------------------------------------
+
+        bed_type = bed_type.upper()
 
         if bed_type not in [
             "GENERAL",
@@ -150,11 +153,75 @@ def reserve_bed(
                     "message": (
                         "Patient already has "
                         "an active reservation."
-                    )
+                    ),
+                    "reservation": existing
                 }
 
         # ----------------------------------------
-        # Check capacity
+        # Physical bed registry
+        # ----------------------------------------
+
+        beds = inventory.get(
+            "beds",
+            {}
+        )
+
+        prefix = (
+            "ICU-"
+            if bed_type == "ICU"
+            else "GENERAL-"
+        )
+
+        # ----------------------------------------
+        # Find first available physical bed
+        # ----------------------------------------
+
+        assigned_bed_id = None
+
+        for bed_id, bed_status in beds.items():
+
+            if (
+                bed_id.startswith(prefix)
+                and bed_status == "AVAILABLE"
+            ):
+
+                assigned_bed_id = bed_id
+                break
+
+        # ----------------------------------------
+        # Physical bed unavailable
+        # ----------------------------------------
+
+        if assigned_bed_id is None:
+
+            return {
+                "success": False,
+                "status": (
+                    "NO_ICU_AVAILABLE"
+                    if bed_type == "ICU"
+                    else "NO_BED_AVAILABLE"
+                ),
+                "message": (
+                    "No physical "
+                    + bed_type
+                    + " bed available."
+                )
+            }
+
+        # ----------------------------------------
+        # Update physical bed
+        # ----------------------------------------
+
+        beds[
+            assigned_bed_id
+        ] = "RESERVED"
+
+        inventory[
+            "beds"
+        ] = beds
+
+        # ----------------------------------------
+        # Update aggregate inventory
         # ----------------------------------------
 
         if bed_type == "ICU":
@@ -171,6 +238,14 @@ def reserve_bed(
                     )
                 }
 
+            inventory[
+                "available_icu_beds"
+            ] -= 1
+
+            inventory[
+                "reserved_icu_beds"
+            ] += 1
+
         else:
 
             if inventory[
@@ -185,22 +260,6 @@ def reserve_bed(
                     )
                 }
 
-        # ----------------------------------------
-        # Update inventory
-        # ----------------------------------------
-
-        if bed_type == "ICU":
-
-            inventory[
-                "available_icu_beds"
-            ] -= 1
-
-            inventory[
-                "reserved_icu_beds"
-            ] += 1
-
-        else:
-
             inventory[
                 "available_beds"
             ] -= 1
@@ -209,17 +268,19 @@ def reserve_bed(
                 "reserved_beds"
             ] += 1
 
-            # ----------------------------------------
-            # Persist updated inventory
-            # ----------------------------------------
+        # ----------------------------------------
+        # Persist inventory
+        # ----------------------------------------
 
         save_hospital_inventory(
-                inventory)
-
+            inventory
+        )
 
         # ----------------------------------------
         # Create reservation
         # ----------------------------------------
+
+        now = datetime.now().isoformat()
 
         reservation = {
 
@@ -232,11 +293,14 @@ def reserve_bed(
             "bed_type":
                 bed_type,
 
+            "bed_id":
+                assigned_bed_id,
+
             "status":
                 RESERVED,
 
             "reserved_at":
-                datetime.now().isoformat()
+                now
         }
 
         # ----------------------------------------
@@ -251,7 +315,9 @@ def reserve_bed(
             "success": True,
             "status": RESERVED,
             "message": (
-                f"{bed_type} bed successfully reserved."
+                f"{bed_type} bed "
+                f"{assigned_bed_id} "
+                "successfully reserved."
             ),
             "reservation": reservation
         }
@@ -375,7 +441,38 @@ def mark_bed_occupied(
             "reservation": reservation
         }
 
+def get_next_available_bed(
+    inventory,
+    bed_type
+):
+    """
+    Return the first available physical bed ID.
 
+    Example:
+    ICU-001
+    ICU-002
+    GENERAL-001
+    """
+
+    bed_type = bed_type.upper()
+
+    beds = inventory.get("beds", {})
+
+    prefix = (
+        "ICU"
+        if bed_type == "ICU"
+        else "GENERAL"
+    )
+
+    for bed_id, status in beds.items():
+
+        if (
+            bed_id.startswith(prefix + "-")
+            and status == AVAILABLE
+        ):
+            return bed_id
+
+    return None
 # ============================================================
 # Release Bed
 # ============================================================
