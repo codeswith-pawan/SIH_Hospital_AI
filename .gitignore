@@ -24,3 +24,6 @@ data/*.tmp
 # Local backups
 *.backup
 *.before_*
+
+# Runtime data
+data/
