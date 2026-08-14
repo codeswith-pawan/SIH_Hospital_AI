@@ -13,24 +13,42 @@ from src.prediction.reservation_store import (
 )
 
 
+# ============================================================
+# TEST DATA
+# ============================================================
+
 HOSPITAL_ID = "GH_PERSISTENCE_TEST"
 PATIENT_ID = "PAT_PERSISTENCE_TEST"
-
-
-print("\n==============================")
-print("INVENTORY PERSISTENCE TEST")
-print("==============================")
 
 
 # ============================================================
 # CLEAN TEST STATE
 # ============================================================
 
-# Remove old reservation for this test
-reservations = {}
+def clean_test_state():
+    """
+    Remove old inventory and reservation data
+    created by this test.
+    """
 
-try:
-    from src.prediction.reservation_store import load_reservations
+    # ----------------------------------------
+    # Remove old inventory
+    # ----------------------------------------
+
+    inventory_map = load_bed_inventory()
+
+    inventory_map.pop(
+        HOSPITAL_ID,
+        None
+    )
+
+    save_bed_inventory(
+        inventory_map
+    )
+
+    # ----------------------------------------
+    # Remove old reservation
+    # ----------------------------------------
 
     reservations = load_reservations()
 
@@ -49,187 +67,243 @@ try:
         reservations
     )
 
-except Exception:
-    pass
-
 
 # ============================================================
-# CLEAN OLD TEST INVENTORY
+# INVENTORY PERSISTENCE TEST
 # ============================================================
 
-inventory_map = load_bed_inventory()
+def test_inventory_persistence():
+    """
+    Test that:
 
-inventory_map.pop(
-    HOSPITAL_ID,
-    None
-)
+    1. Hospital physical beds are initialized.
+    2. ICU bed can be reserved.
+    3. Inventory is persisted to disk.
+    4. Reserved physical ICU bed is stored correctly.
+    5. Bed can be released successfully.
+    """
 
-save_bed_inventory(
-    inventory_map
-)
+    # ========================================================
+    # CLEAN TEST STATE
+    # ========================================================
 
+    clean_test_state()
 
-# ============================================================
-# CLEAN OLD TEST RESERVATION
-# ============================================================
+    try:
 
-reservations = load_reservations()
+        # ====================================================
+        # INITIALIZE PHYSICAL BEDS
+        # ====================================================
 
-reservation_key = (
-    HOSPITAL_ID
-    + "_"
-    + PATIENT_ID
-)
+        inventory = initialize_hospital_beds(
+            hospital_id=HOSPITAL_ID,
+            available_beds=10,
+            available_icu_beds=1,
+        )
 
-reservations.pop(
-    reservation_key,
-    None
-)
+        # ----------------------------------------------------
+        # Validate physical bed structure
+        # ----------------------------------------------------
 
-save_reservations(
-    reservations
-)
+        assert "beds" in inventory
 
+        # Expected ICU bed must exist
+        assert "ICU-001" in inventory["beds"]
 
-# ============================================================
-# INITIALIZE FRESH INVENTORY
-# ============================================================
+        assert (
+            inventory["beds"]["ICU-001"]
+            == "AVAILABLE"
+        )
 
-inventory = initialize_hospital_beds(
-    hospital_id=HOSPITAL_ID,
-    available_beds=10,
-    available_icu_beds=1,
-)
+        # Expected general bed must exist
+        assert "GENERAL-001" in inventory["beds"]
 
-print("\nInitial Inventory:")
-print(inventory)
+        assert (
+            inventory["beds"]["GENERAL-001"]
+            == "AVAILABLE"
+        )
 
+        # Validate initial counters
+        assert inventory["available_beds"] == 10
 
-print("\nInitial Inventory:")
-print(inventory)
+        assert (
+            inventory["available_icu_beds"]
+            == 1
+        )
 
+        assert inventory["reserved_beds"] == 0
 
-# ============================================================
-# RESERVE ICU
-# ============================================================
-
-result = reserve_bed(
-    hospital_id=HOSPITAL_ID,
-    patient_id=PATIENT_ID,
-    bed_type="ICU",
-    inventory=inventory,
-)
-
-
-print("\nReservation Result:")
-print(result)
-
-
-# ============================================================
-# VALIDATE RESERVATION SUCCESS
-# ============================================================
-
-if not result["success"]:
-
-    print("\nFAIL — ICU reservation failed.")
-    print(
-        "Status:",
-        result["status"]
-    )
-
-    raise SystemExit(1)
+        assert (
+            inventory["reserved_icu_beds"]
+            == 0
+        )
 
 
-print("\nInventory after reservation:")
-print(inventory)
+        # ====================================================
+        # RESERVE ICU BED
+        # ====================================================
+
+        result = reserve_bed(
+            hospital_id=HOSPITAL_ID,
+            patient_id=PATIENT_ID,
+            bed_type="ICU",
+            inventory=inventory,
+        )
+
+        # Reservation must succeed
+        assert result["success"] is True
+
+        assert (
+            result["status"]
+            == "RESERVED"
+        )
+
+        reservation = result["reservation"]
+
+        # Validate reservation
+        assert (
+            reservation["bed_type"]
+            == "ICU"
+        )
+
+        assert (
+            reservation["bed_id"]
+            == "ICU-001"
+        )
+
+        assert (
+            reservation["status"]
+            == "RESERVED"
+        )
 
 
-# ============================================================
-# LOAD INVENTORY FROM DISK
-# ============================================================
+        # ====================================================
+        # CHECK MEMORY INVENTORY
+        # ====================================================
 
-persistent_inventory = get_hospital_inventory(
-    HOSPITAL_ID
-)
+        # One ICU bed was reserved
+        assert (
+            inventory["available_icu_beds"]
+            == 0
+        )
 
+        assert (
+            inventory["reserved_icu_beds"]
+            == 1
+        )
 
-print("\nInventory loaded from disk:")
-print(persistent_inventory)
-
-
-# ============================================================
-# VALIDATION
-# ============================================================
-
-print("\n==============================")
-print("VALIDATION")
-print("==============================")
-
-
-if (
-    persistent_inventory is not None
-    and persistent_inventory["available_icu_beds"] == 0
-    and persistent_inventory["reserved_icu_beds"] == 1
-):
-
-    print(
-        "PASS — Bed inventory was persisted correctly."
-    )
-
-else:
-
-    print(
-        "FAIL — Bed inventory persistence is incorrect."
-    )
-
-    raise SystemExit(1)
+        # Physical bed status must change
+        assert (
+            inventory["beds"]["ICU-001"]
+            == "RESERVED"
+        )
 
 
-# ============================================================
-# RELEASE
-# ============================================================
+        # ====================================================
+        # LOAD INVENTORY FROM DISK
+        # ====================================================
 
-print("\n==============================")
-print("CLEANUP — RELEASE")
-print("==============================")
+        persistent_inventory = get_hospital_inventory(
+            HOSPITAL_ID
+        )
 
+        assert (
+            persistent_inventory
+            is not None
+        )
 
-release_result = release_bed(
-    hospital_id=HOSPITAL_ID,
-    patient_id=PATIENT_ID,
-    inventory=inventory,
-)
+        # Validate persisted counters
+        assert (
+            persistent_inventory[
+                "available_icu_beds"
+            ]
+            == 0
+        )
 
+        assert (
+            persistent_inventory[
+                "reserved_icu_beds"
+            ]
+            == 1
+        )
 
-print(release_result)
+        # Physical beds must also persist
+        assert (
+            "beds"
+            in persistent_inventory
+        )
 
-
-if release_result["success"]:
-
-    print(
-        "PASS — Test reservation released."
-    )
-
-else:
-
-    print(
-        "WARNING — Test reservation cleanup failed."
-    )
-
-
-# ============================================================
-# FINAL INVENTORY
-# ============================================================
-
-final_inventory = get_hospital_inventory(
-    HOSPITAL_ID
-)
-
-
-print("\nFinal Persistent Inventory:")
-print(final_inventory)
+        assert (
+            persistent_inventory[
+                "beds"
+            ]["ICU-001"]
+            == "RESERVED"
+        )
 
 
-print("\n==============================")
-print("INVENTORY PERSISTENCE TEST COMPLETED")
-print("==============================")
+        # ====================================================
+        # RELEASE BED
+        # ====================================================
+
+        release_result = release_bed(
+            hospital_id=HOSPITAL_ID,
+            patient_id=PATIENT_ID,
+            inventory=inventory,
+        )
+
+        # Release must succeed
+        assert (
+            release_result["success"]
+            is True
+        )
+
+        assert (
+            release_result["status"]
+            == "RELEASED"
+        )
+
+
+        # ====================================================
+        # VERIFY RELEASED INVENTORY
+        # ====================================================
+
+        released_inventory = get_hospital_inventory(
+            HOSPITAL_ID
+        )
+
+        assert (
+            released_inventory
+            is not None
+        )
+
+        # ICU capacity must be restored
+        assert (
+            released_inventory[
+                "available_icu_beds"
+            ]
+            == 1
+        )
+
+        assert (
+            released_inventory[
+                "reserved_icu_beds"
+            ]
+            == 0
+        )
+
+        # Physical ICU bed must become available again
+        assert (
+            released_inventory[
+                "beds"
+            ]["ICU-001"]
+            == "AVAILABLE"
+        )
+
+
+    finally:
+
+        # ====================================================
+        # CLEANUP TEST DATA
+        # ====================================================
+
+        clean_test_state()

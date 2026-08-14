@@ -23,7 +23,7 @@ CONFIRMED = "CONFIRMED"
 OCCUPIED = "OCCUPIED"
 RELEASED = "RELEASED"
 EXPIRED = "EXPIRED"
-RESERVATION_TIMEOUT_MINUTES = 15
+RESERVATION_TIMEOUT_MINUTES = 1
 
 
 # ============================================================
@@ -57,21 +57,43 @@ def initialize_hospital_beds(
 
         return existing
 
-    # Otherwise create new inventory
+    # ========================================================
+    # Create physical beds
+    # ========================================================
+
+    beds = {}
+
+    # Create GENERAL physical beds
+    for i in range(
+        1,
+        int(available_beds) + 1
+    ):
+
+        bed_id = f"GENERAL-{i:03d}"
+
+        beds[bed_id] = "AVAILABLE"
+
+    # Create ICU physical beds
+    for i in range(
+        1,
+        int(available_icu_beds) + 1
+    ):
+
+        bed_id = f"ICU-{i:03d}"
+
+        beds[bed_id] = "AVAILABLE"
+
+    # ========================================================
+    # Create inventory
+    # ========================================================
+
     inventory = {
         "hospital_id": hospital_id,
-
-        "available_beds": int(
-            available_beds
-        ),
-
-        "available_icu_beds": int(
-            available_icu_beds
-        ),
-
+        "available_beds": int(available_beds),
+        "available_icu_beds": int(available_icu_beds),
         "reserved_beds": 0,
-
-        "reserved_icu_beds": 0
+        "reserved_icu_beds": 0,
+        "beds": beds
     }
 
     # Persist new inventory
@@ -80,6 +102,7 @@ def initialize_hospital_beds(
     )
 
     return inventory
+    
 
 # ============================================================
 # Reserve Bed
@@ -483,10 +506,20 @@ def release_bed(
     inventory
 ):
     """
-    Release an active reservation.
+    Release a RESERVED bed.
+
+    Allowed lifecycle:
+    RESERVED -> RELEASED
+
+    OCCUPIED beds must be handled through
+    the discharge process.
     """
 
     with RESERVATION_LOCK:
+
+        # ----------------------------------------
+        # Load persistent reservations
+        # ----------------------------------------
 
         reservations = load_reservations()
 
@@ -500,26 +533,96 @@ def release_bed(
             key
         )
 
+        # ----------------------------------------
+        # Reservation not found
+        # ----------------------------------------
+
         if reservation is None:
 
             return {
                 "success": False,
-                "status": "NOT_FOUND"
+                "status": "NOT_FOUND",
+                "message": "Reservation not found."
             }
+
+        # ----------------------------------------
+        # Already released
+        # ----------------------------------------
 
         if reservation["status"] == RELEASED:
 
             return {
                 "success": False,
-                "status": "ALREADY_RELEASED"
+                "status": "ALREADY_RELEASED",
+                "message": (
+                    "This reservation has already "
+                    "been released."
+                )
             }
+
+        # ----------------------------------------
+        # Occupied bed cannot be released here
+        # ----------------------------------------
+
+        if reservation["status"] == OCCUPIED:
+
+            return {
+                "success": False,
+                "status": "BED_OCCUPIED",
+                "message": (
+                    "Occupied bed cannot be released. "
+                    "Use the discharge process instead."
+                )
+            }
+
+        # ----------------------------------------
+        # Only RESERVED can be released
+        # ----------------------------------------
+
+        if reservation["status"] != RESERVED:
+
+            return {
+                "success": False,
+                "status": "INVALID_STATUS",
+                "message": (
+                    "Only a reserved bed can be released."
+                ),
+                "current_status": reservation["status"]
+            }
+
+        # ----------------------------------------
+        # Get reservation details
+        # ----------------------------------------
 
         bed_type = reservation[
             "bed_type"
         ]
 
+        bed_id = reservation.get(
+            "bed_id"
+        )
+
         # ----------------------------------------
-        # Restore inventory
+        # Restore physical bed status
+        # ----------------------------------------
+
+        if bed_id:
+
+            beds = inventory.get(
+                "beds",
+                {}
+            )
+
+            if bed_id in beds:
+
+                beds[bed_id] = AVAILABLE
+
+                inventory[
+                    "beds"
+                ] = beds
+
+        # ----------------------------------------
+        # Restore ICU inventory
         # ----------------------------------------
 
         if bed_type == "ICU":
@@ -536,7 +639,11 @@ def release_bed(
                     "reserved_icu_beds"
                 ] -= 1
 
-        else:
+        # ----------------------------------------
+        # Restore GENERAL inventory
+        # ----------------------------------------
+
+        elif bed_type == "GENERAL":
 
             inventory[
                 "available_beds"
@@ -551,7 +658,21 @@ def release_bed(
                 ] -= 1
 
         # ----------------------------------------
-        # Update reservation
+        # Invalid bed type safety check
+        # ----------------------------------------
+
+        else:
+
+            return {
+                "success": False,
+                "status": "INVALID_BED_TYPE",
+                "message": (
+                    "Invalid bed type in reservation."
+                )
+            }
+
+        # ----------------------------------------
+        # Update reservation status
         # ----------------------------------------
 
         reservation[
@@ -570,6 +691,207 @@ def release_bed(
             inventory
         )
 
+        # ----------------------------------------
+        # Persist updated reservation
+        # ----------------------------------------
+
+        save_reservation(
+            reservation
+        )
+
+        # ----------------------------------------
+        # Return result
+        # ----------------------------------------
+
+        return {
+            "success": True,
+            "status": RELEASED,
+            "message": "Reservation released successfully.",
+            "reservation": reservation
+        }
+
+
+# ============================================================
+# Discharge Patient
+# ============================================================
+
+def discharge_patient(
+    hospital_id,
+    patient_id,
+    inventory
+):
+    """
+    Discharge an occupied patient.
+
+    Allowed lifecycle:
+
+    OCCUPIED -> RELEASED
+    """
+
+    with RESERVATION_LOCK:
+
+        # ----------------------------------------
+        # Load persistent reservations
+        # ----------------------------------------
+
+        reservations = load_reservations()
+
+        key = (
+            hospital_id
+            + "_"
+            + patient_id
+        )
+
+        reservation = reservations.get(
+            key
+        )
+
+        # ----------------------------------------
+        # Reservation not found
+        # ----------------------------------------
+
+        if reservation is None:
+
+            return {
+                "success": False,
+                "status": "NOT_FOUND",
+                "message": "Reservation not found."
+            }
+
+        # ----------------------------------------
+        # Already released
+        # ----------------------------------------
+
+        if reservation["status"] == RELEASED:
+
+            return {
+                "success": False,
+                "status": "ALREADY_RELEASED",
+                "message": (
+                    "Patient has already been discharged."
+                )
+            }
+
+        # ----------------------------------------
+        # Only OCCUPIED bed can be discharged
+        # ----------------------------------------
+
+        if reservation["status"] != OCCUPIED:
+
+            return {
+                "success": False,
+                "status": "INVALID_STATUS",
+                "message": (
+                    "Only an occupied bed can be discharged."
+                ),
+                "current_status": reservation["status"]
+            }
+
+        # ----------------------------------------
+        # Get bed details
+        # ----------------------------------------
+
+        bed_type = reservation[
+            "bed_type"
+        ]
+
+        bed_id = reservation.get(
+            "bed_id"
+        )
+
+        # ----------------------------------------
+        # Restore physical bed
+        # ----------------------------------------
+
+        if bed_id:
+
+            beds = inventory.get(
+                "beds",
+                {}
+            )
+
+            if bed_id in beds:
+
+                beds[bed_id] = "AVAILABLE"
+
+                inventory[
+                    "beds"
+                ] = beds
+
+        # ----------------------------------------
+        # Restore ICU inventory
+        # ----------------------------------------
+
+        if bed_type == "ICU":
+
+            inventory[
+                "available_icu_beds"
+            ] += 1
+
+            if inventory[
+                "reserved_icu_beds"
+            ] > 0:
+
+                inventory[
+                    "reserved_icu_beds"
+                ] -= 1
+
+        # ----------------------------------------
+        # Restore GENERAL inventory
+        # ----------------------------------------
+
+        elif bed_type == "GENERAL":
+
+            inventory[
+                "available_beds"
+            ] += 1
+
+            if inventory[
+                "reserved_beds"
+            ] > 0:
+
+                inventory[
+                    "reserved_beds"
+                ] -= 1
+
+        # ----------------------------------------
+        # Invalid bed type
+        # ----------------------------------------
+
+        else:
+
+            return {
+                "success": False,
+                "status": "INVALID_BED_TYPE",
+                "message": (
+                    "Invalid bed type in reservation."
+                )
+            }
+
+        # ----------------------------------------
+        # Update reservation
+        # ----------------------------------------
+
+        reservation[
+            "status"
+        ] = RELEASED
+
+        reservation[
+            "discharged_at"
+        ] = datetime.now().isoformat()
+
+        # ----------------------------------------
+        # Persist inventory
+        # ----------------------------------------
+
+        save_hospital_inventory(
+            inventory
+        )
+
+        # ----------------------------------------
+        # Persist reservation
+        # ----------------------------------------
+
         save_reservation(
             reservation
         )
@@ -577,8 +899,13 @@ def release_bed(
         return {
             "success": True,
             "status": RELEASED,
+            "message": (
+                "Patient discharged successfully."
+            ),
             "reservation": reservation
         }
+
+
 
 
 # ============================================================
@@ -689,9 +1016,26 @@ def expire_reservation(
         # Return bed
         # ----------------------------------------
 
-        bed_type = reservation[
-            "bed_type"
-        ]
+        bed_id = reservation.get(
+            "bed_id"
+        )
+
+        if bed_id:
+
+            beds = inventory.get(
+                "beds",
+                {}
+            )
+
+            if bed_id in beds:
+
+                beds[bed_id] = "AVAILABLE"
+
+                inventory[
+                    "beds"
+                ] = beds
+
+        bed_type = reservation["bed_type"]
 
         if bed_type == "ICU":
 
@@ -740,7 +1084,6 @@ def expire_reservation(
         save_hospital_inventory(
             inventory
         )
-
 
         save_reservation(
             reservation
@@ -827,6 +1170,22 @@ def cleanup_expired_reservations(
         if datetime.now() < expiry_time:
 
             continue
+
+        # ----------------------------------------
+        # Return physical bed
+        # ----------------------------------------
+
+        bed_id = reservation.get("bed_id")
+
+        if bed_id:
+
+            beds = inventory.get("beds", {})
+
+            if bed_id in beds:
+
+                beds[bed_id] = "AVAILABLE"
+
+                inventory["beds"] = beds
 
         # ----------------------------------------
         # Release bed

@@ -5,7 +5,8 @@ AI Powered Smart Hospital Referral System
 
 import pandas as pd
 from fastapi.middleware.cors import CORSMiddleware
-
+from src.database.database import SessionLocal
+from src.database.models import Hospital
 from fastapi import FastAPI, HTTPException
 
 from src.api.schemas import (
@@ -49,8 +50,12 @@ from src.utils.referral_rules import (
     evaluate_hospital_capability
 )
 from src.prediction.bed_reservation import (
+    reserve_bed,
     confirm_reservation,
+    mark_bed_occupied,
     release_bed,
+    discharge_patient,
+    expire_reservation,
     get_reservation,
 )
 
@@ -64,7 +69,7 @@ from src.prediction.referral_store import (
     update_referral_status,
     attach_reservation,
 )
-
+from src.api.patient_routes import router as patient_router
 
 app = FastAPI(
     title="AI Powered Smart Hospital Referral System",
@@ -87,7 +92,10 @@ app.add_middleware(
 )
 
 
+app.include_router(patient_router)
+
 def serialize_hospital(hospital):
+
     if hospital is None:
         return None
 
@@ -99,13 +107,158 @@ def serialize_hospital(hospital):
 
     # Convert pandas NaN to None
     for key, value in data.items():
+
         try:
             if pd.isna(value):
                 data[key] = None
+
         except (TypeError, ValueError):
             pass
 
-    return data
+    # Normalize boolean-like values
+    boolean_fields = [
+        "emergency_24x7",
+        "accepts_referral",
+        "ambulance",
+        "oxygen_support",
+        "ventilator",
+        "blood_bank",
+        "cardiology",
+        "neurology",
+        "nephrology",
+        "pulmonology",
+        "orthopedics",
+        "general_medicine",
+        "general_surgery",
+        "trauma_unit",
+        "burn_unit",
+        "ct_scan",
+        "mri",
+        "xray",
+        "ultrasound",
+        "ecg",
+        "dialysis",
+        "blood_test",
+        "cbc",
+        "troponin_test",
+        "dengue_ns1_test",
+        "malaria_test",
+        "blood_glucose_test",
+        "hba1c_test",
+        "kidney_function_test",
+        "pulmonary_function_test",
+        "blood_culture",
+        "lactate_test",
+        "stool_test",
+    ]
+
+    for field in boolean_fields:
+
+        if field not in data:
+            continue
+
+        value = data[field]
+
+        if value in [1, "1", True, "Yes", "yes"]:
+            data[field] = "Yes"
+
+        elif value in [0, "0", False, "No", "no"]:
+            data[field] = "No"
+
+    return {
+        "rank": data.get("rank"),
+        "recommendation_type": data.get(
+            "recommendation_type"
+        ),
+
+        "hospital": {
+            "hospital_id": data.get("hospital_id"),
+            "name": data.get("name"),
+
+            "location": {
+                "state": data.get("state"),
+                "district": data.get("district"),
+                "city": data.get("city"),
+                "latitude": data.get("latitude"),
+                "longitude": data.get("longitude"),
+                "distance_km": data.get("distance_km"),
+                "distance_zone": data.get(
+                    "distance_zone"
+                ),
+            },
+        },
+
+        "beds": {
+            "total_beds": data.get("total_beds"),
+            "occupied_beds": data.get(
+                "occupied_beds"
+            ),
+            "available_beds": data.get(
+                "available_beds"
+            ),
+            "icu_beds": data.get("icu_beds"),
+            "available_icu_beds": data.get(
+                "available_icu_beds"
+            ),
+            "emergency_beds": data.get("emergency_beds"),
+            "available_emergency_beds": data.get(
+                "available_emergency_beds"
+            ),
+        },
+
+        "scores": {
+            "final_score": data.get("final_score"),
+            "hospital_score": data.get(
+                "hospital_score"
+            ),
+            "success_probability": data.get(
+                "success_probability"
+            ),
+            "occupancy_rate": data.get(
+                "occupancy_rate"
+            ),
+        },
+
+        "matching": {
+            "specialty_match": data.get(
+                "specialty_match"
+            ),
+            "test_match": data.get("test_match"),
+            "bed_match": data.get("bed_match"),
+            "icu_match": data.get("icu_match"),
+        },
+
+        "services": {
+            "emergency_24x7": data.get(
+                "emergency_24x7"
+            ),
+            "accepts_referral": data.get(
+                "accepts_referral"
+            ),
+            "ambulance": data.get("ambulance"),
+            "oxygen_support": data.get(
+                "oxygen_support"
+            ),
+            "ventilator": data.get("ventilator"),
+            "blood_bank": data.get("blood_bank"),
+        },
+
+        "departments": {
+            "cardiology": data.get("cardiology"),
+            "neurology": data.get("neurology"),
+            "nephrology": data.get("nephrology"),
+            "pulmonology": data.get("pulmonology"),
+            "orthopedics": data.get("orthopedics"),
+            "general_medicine": data.get(
+                "general_medicine"
+            ),
+            "general_surgery": data.get(
+                "general_surgery"
+            ),
+            "trauma_unit": data.get("trauma_unit"),
+            "burn_unit": data.get("burn_unit"),
+        },
+    }
 
 
 # ============================================================
@@ -292,6 +445,110 @@ def create_referral(
         ),
     }
 
+# ============================================================
+# RESERVE BED
+# ============================================================
+
+@app.post(
+    "/reservation/{hospital_id}/{patient_id}/reserve"
+)
+def reserve_bed_api(
+    hospital_id: str,
+    patient_id: str,
+    bed_type: str
+):
+
+    inventory = get_hospital_inventory(
+        hospital_id
+    )
+
+    if inventory is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Hospital inventory not found."
+        )
+
+    result = reserve_bed(
+        hospital_id=hospital_id,
+        patient_id=patient_id,
+        bed_type=bed_type,
+        inventory=inventory,
+    )
+
+    if not result["success"]:
+
+        raise HTTPException(
+            status_code=400,
+            detail=result
+        )
+
+    return {
+        "success": True,
+        "status": result["status"],
+        "message": result["message"],
+        "reservation": result["reservation"],
+        "inventory": get_hospital_inventory(
+            hospital_id
+        ),
+    }
+
+# ============================================================
+# EXPIRE RESERVATION
+# ============================================================
+
+@app.post(
+    "/reservation/{hospital_id}/{patient_id}/expire"
+)
+def expire_reservation_api(
+    hospital_id: str,
+    patient_id: str
+):
+
+    reservation = get_reservation(
+        hospital_id,
+        patient_id
+    )
+
+    if reservation is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Reservation not found."
+        )
+
+    inventory = get_hospital_inventory(
+        hospital_id
+    )
+
+    if inventory is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Hospital inventory not found."
+        )
+
+    result = expire_reservation(
+        hospital_id=hospital_id,
+        patient_id=patient_id,
+        inventory=inventory,
+    )
+
+    if not result["success"]:
+
+        raise HTTPException(
+            status_code=400,
+            detail=result
+        )
+
+    return {
+        "success": True,
+        "status": result["status"],
+        "message": "Reservation expired successfully.",
+        "reservation": result["reservation"],
+        "inventory": inventory,
+    }
+
 
 # ============================================================
 # GET RESERVATION
@@ -321,6 +578,38 @@ def get_reservation_status(
         "success": True,
         "status": reservation["status"],
         "reservation": reservation,
+    }
+
+
+# ============================================================
+# MARK BED OCCUPIED
+# ============================================================
+
+@app.post(
+    "/reservation/{hospital_id}/{patient_id}/occupy"
+)
+def occupy_bed_api(
+    hospital_id: str,
+    patient_id: str
+):
+
+    result = mark_bed_occupied(
+        hospital_id=hospital_id,
+        patient_id=patient_id,
+    )
+
+    if not result["success"]:
+
+        raise HTTPException(
+            status_code=400,
+            detail=result
+        )
+
+    return {
+        "success": True,
+        "status": result["status"],
+        "message": "Bed marked as occupied successfully.",
+        "reservation": result["reservation"],
     }
 
 
@@ -430,6 +719,70 @@ def release_reservation_api(
     }
 
 # ============================================================
+# DISCHARGE PATIENT
+# ============================================================
+
+@app.post(
+    "/reservation/{hospital_id}/{patient_id}/discharge"
+)
+def discharge_patient_api(
+    hospital_id: str,
+    patient_id: str
+):
+
+    # ----------------------------------------
+    # Get hospital inventory
+    # ----------------------------------------
+
+    inventory = get_hospital_inventory(
+        hospital_id
+    )
+
+    if inventory is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Hospital inventory not found."
+        )
+
+    # ----------------------------------------
+    # Discharge patient
+    # ----------------------------------------
+
+    result = discharge_patient(
+        hospital_id=hospital_id,
+        patient_id=patient_id,
+        inventory=inventory,
+    )
+
+    # ----------------------------------------
+    # Handle failure
+    # ----------------------------------------
+
+    if not result["success"]:
+
+        raise HTTPException(
+            status_code=400,
+            detail=result
+        )
+
+    # ----------------------------------------
+    # Return success response
+    # ----------------------------------------
+
+    return {
+        "success": True,
+        "status": result["status"],
+        "message": "Patient discharged successfully.",
+        "reservation": result["reservation"],
+        "inventory": get_hospital_inventory(
+            hospital_id
+        ),
+    }
+
+
+
+# ============================================================
 # HOSPITAL DASHBOARD INVENTORY
 # ============================================================
 
@@ -473,21 +826,49 @@ def get_ranked_hospitals(
             PATIENTS_PATH
         )
 
-        hospitals = pd.read_csv(
-            HOSPITALS_PATH
-        )
-
     except Exception as error:
 
         raise HTTPException(
             status_code=500,
             detail={
                 "message":
-                    "Failed to load datasets.",
+                    "Failed to load patients dataset.",
                 "error":
                     str(error),
             }
         )
+
+    db = SessionLocal()
+
+    try:
+
+        hospital_records = db.query(
+            Hospital
+        ).all()
+
+    finally:
+
+        db.close()
+
+    if not hospital_records:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No hospitals found in database."
+        )
+
+    hospitals = pd.DataFrame(
+        [
+            {
+                column.name: getattr(
+                    hospital,
+                    column.name
+                )
+                for column in Hospital.__table__.columns
+            }
+            for hospital in hospital_records
+        ]
+    )
 
     # ----------------------------------------
     # Find patient
@@ -537,6 +918,37 @@ def get_ranked_hospitals(
     for _, hospital_row in hospitals.iterrows():
 
         hospital = hospital_row.to_dict()
+
+        # ------------------------------------
+        # Apply live bed inventory
+        # ------------------------------------
+
+        inventory = get_hospital_inventory(
+            hospital["hospital_id"]
+        )
+
+        if inventory is not None:
+
+            hospital["available_beds"] = (
+                inventory.get(
+                    "available_beds",
+                    hospital["available_beds"]
+                )
+            )
+
+            hospital["available_icu_beds"] = (
+                inventory.get(
+                    "available_icu_beds",
+                    hospital["available_icu_beds"]
+                )
+            )
+
+            hospital["available_emergency_beds"] = (
+                inventory.get(
+                    "available_emergency_beds",
+                    hospital["available_emergency_beds"]
+                )
+            )
 
         capability = (
             evaluate_hospital_capability(

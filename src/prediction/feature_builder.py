@@ -26,10 +26,10 @@ def build_referral_features(patient, hospital):
     # --------------------------------
 
     distance_km = calculate_distance_km(
-        patient["latitude"],
-        patient["longitude"],
-        hospital["latitude"],
-        hospital["longitude"],
+        float(patient["latitude"]),
+        float(patient["longitude"]),
+        float(hospital["latitude"]),
+        float(hospital["longitude"]),
     )
 
     # --------------------------------

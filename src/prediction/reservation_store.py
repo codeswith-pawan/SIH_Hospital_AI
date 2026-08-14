@@ -254,16 +254,60 @@ def get_hospital_inventory(
     hospital_id
 ):
     """
-    Get one hospital's persistent inventory.
+    Get one hospital's persistent inventory
+    and recalculate bed counts from actual
+    bed-level status.
     """
 
     inventory_map = (
         load_bed_inventory()
     )
 
-    return inventory_map.get(
+    inventory = inventory_map.get(
         hospital_id
     )
+
+    if inventory is None:
+        return None
+
+    beds = inventory.get(
+        "beds",
+        {}
+    )
+
+    general_beds = {
+        bed_id: status
+        for bed_id, status in beds.items()
+        if bed_id.startswith("GENERAL")
+    }
+
+    icu_beds = {
+        bed_id: status
+        for bed_id, status in beds.items()
+        if bed_id.startswith("ICU")
+    }
+
+    inventory["available_beds"] = sum(
+        status == "AVAILABLE"
+        for status in general_beds.values()
+    )
+
+    inventory["reserved_beds"] = sum(
+        status == "RESERVED"
+        for status in general_beds.values()
+    )
+
+    inventory["available_icu_beds"] = sum(
+        status == "AVAILABLE"
+        for status in icu_beds.values()
+    )
+
+    inventory["reserved_icu_beds"] = sum(
+        status == "RESERVED"
+        for status in icu_beds.values()
+    )
+
+    return inventory
 
 
 def clear_reservations():

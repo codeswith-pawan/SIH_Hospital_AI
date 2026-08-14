@@ -27,3 +27,11 @@ data/*.tmp
 
 # Runtime data
 data/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Backup files
+*.save

@@ -50,8 +50,33 @@ type ReferralResponse = {
   referrals: Referral[];
 };
 
+
+type PatientResponse = {
+  success: boolean;
+  hospital_id: string;
+  count: number;
+  patients: Patient[];
+};
+
+
 type HospitalDashboardProps = {
   user: User;
+};
+
+type Patient = {
+  visit_id: number;
+  patient_id: string;
+  name: string;
+  age: number;
+  gender: string;
+  disease: string;
+  priority: string;
+  icu_required: string;
+  status: string;
+  admission_type: string;
+  admitted_at: string;
+  treatment_started_at?: string | null;
+  completed_at?: string | null;
 };
 
 export default function HospitalDashboard({
@@ -73,6 +98,10 @@ export default function HospitalDashboard({
   const [selectedReferral, setSelectedReferral] =
     useState<Referral | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patientLoading, setPatientLoading] = useState(false);
+  const [patientError, setPatientError] = useState("");
 
   useEffect(() => {
     if (!user.hospital_id) {
@@ -184,6 +213,39 @@ export default function HospitalDashboard({
       setReferralLoading(false);
     }
   };
+  const loadPatients = async () => {
+  if (!user.hospital_id) return;
+
+  setPatientLoading(true);
+  setPatientError("");
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:8000/patients/hospital/${user.hospital_id}`
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to load patients.");
+    }
+
+    const result: PatientResponse =
+      await response.json();
+
+    if (!result.success) {
+      throw new Error("Patient data unavailable.");
+    }
+
+    setPatients(result.patients || []);
+  } catch (err) {
+    setPatientError(
+      err instanceof Error
+        ? err.message
+        : "Failed to load patients."
+    );
+  } finally {
+    setPatientLoading(false);
+  }
+};
 
   const updateReferralStatus = async (
     referralId: string,
@@ -227,13 +289,18 @@ export default function HospitalDashboard({
   };
 
   useEffect(() => {
-    if (
-      activeTab === "referrals" &&
-      user.hospital_id
-    ) {
-      loadReferrals();
-    }
-  }, [activeTab, user.hospital_id]);
+
+  if (!user.hospital_id) return;
+
+  if (activeTab === "referrals") {
+    loadReferrals();
+  }
+
+  if (activeTab === "patients") {
+    loadPatients();
+  }
+
+}, [activeTab, user.hospital_id]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -741,11 +808,155 @@ export default function HospitalDashboard({
           </div>
         )}
 
-        {activeTab === "patients" && (
-          <Placeholder
-            title="Patient Management"
-            text="Patient referral records will appear here."
-          />
+                {activeTab === "patients" && (
+          <section>
+
+            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+
+              <div>
+                <h2 className="text-2xl font-bold">
+                  Patient Management
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-400">
+                  View and manage patients currently associated with this hospital.
+                </p>
+              </div>
+
+              <button
+                onClick={loadPatients}
+                disabled={patientLoading}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {patientLoading
+                  ? "Loading..."
+                  : "Refresh Patients"}
+              </button>
+
+            </div>
+
+            {patientError && (
+              <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+                {patientError}
+              </div>
+            )}
+
+            {patientLoading && patients.length === 0 && (
+              <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900 p-6 text-slate-400">
+                Loading patients...
+              </div>
+            )}
+
+            {!patientLoading &&
+              !patientError &&
+              patients.length === 0 && (
+                <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900 p-6 text-slate-400">
+                  No patients found for this hospital.
+                </div>
+              )}
+
+            {patients.length > 0 && (
+              <div className="mt-6 grid gap-4 lg:grid-cols-2">
+
+                {patients.map((patient) => (
+
+                  <div
+                    key={patient.visit_id}
+                    className="rounded-2xl border border-slate-800 bg-slate-900 p-5"
+                  >
+
+                    <div className="flex items-start justify-between gap-4">
+
+                      <div>
+                        <p className="text-lg font-bold">
+                          {patient.name}
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-400">
+                          {patient.patient_id}
+                        </p>
+                      </div>
+
+                      <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300">
+                        {patient.status}
+                      </span>
+
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-4 text-sm">
+
+                      <div>
+                        <p className="text-slate-500">
+                          Age / Gender
+                        </p>
+
+                        <p className="mt-1 font-semibold">
+                          {patient.age} / {patient.gender}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-slate-500">
+                          Priority
+                        </p>
+
+                        <p className="mt-1 font-semibold">
+                          {patient.priority}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-slate-500">
+                          Disease
+                        </p>
+
+                        <p className="mt-1 font-semibold">
+                          {patient.disease}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-slate-500">
+                          ICU Required
+                        </p>
+
+                        <p className="mt-1 font-semibold">
+                          {patient.icu_required}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-slate-500">
+                          Admission Type
+                        </p>
+
+                        <p className="mt-1 font-semibold">
+                          {patient.admission_type}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-slate-500">
+                          Admitted
+                        </p>
+
+                        <p className="mt-1 font-semibold">
+                          {new Date(
+                            patient.admitted_at
+                          ).toLocaleString()}
+                        </p>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                ))}
+
+              </div>
+            )}
+
+          </section>
         )}
 
       </div>
