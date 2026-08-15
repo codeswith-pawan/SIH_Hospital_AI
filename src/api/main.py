@@ -7,7 +7,17 @@ import pandas as pd
 from fastapi.middleware.cors import CORSMiddleware
 from src.database.database import SessionLocal
 from src.database.models import Hospital
-from fastapi import FastAPI, HTTPException
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Depends,
+)
+from src.auth.jwt_utils import (
+    create_access_token,
+)
+from src.auth.dependencies import (
+    require_current_user,
+)
 
 from src.api.schemas import (
     PatientReferralRequest,
@@ -93,6 +103,36 @@ app.add_middleware(
 
 
 app.include_router(patient_router)
+
+# ============================================================
+# HOSPITAL ACCESS AUTHORIZATION
+# ============================================================
+
+def require_hospital_access(
+    hospital_id: str,
+    current_user: dict
+):
+    """
+    Ensure a hospital user can access only
+    its own hospital resources.
+    """
+
+    if current_user["role"] == "HOSPITAL":
+
+        if (
+            current_user.get("hospital_id")
+            != hospital_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "You are not authorized to access "
+                    "this hospital resource."
+                )
+            )
+
+
+
 
 def serialize_hospital(hospital):
 
@@ -455,8 +495,15 @@ def create_referral(
 def reserve_bed_api(
     hospital_id: str,
     patient_id: str,
-    bed_type: str
+    bed_type: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
+    require_hospital_access(
+    hospital_id,
+    current_user
+    )
 
     inventory = get_hospital_inventory(
         hospital_id
@@ -502,8 +549,20 @@ def reserve_bed_api(
 )
 def expire_reservation_api(
     hospital_id: str,
-    patient_id: str
+    patient_id: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
+
+    if (
+        current_user["role"] == "HOSPITAL"
+        and current_user.get("hospital_id") != hospital_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to access this hospital resource."
+        )
 
     reservation = get_reservation(
         hospital_id,
@@ -559,8 +618,20 @@ def expire_reservation_api(
 )
 def get_reservation_status(
     hospital_id: str,
-    patient_id: str
+    patient_id: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
+
+    if (
+        current_user["role"] == "HOSPITAL"
+        and current_user.get("hospital_id") != hospital_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to access this hospital resource."
+        )
 
     reservation = get_reservation(
         hospital_id,
@@ -590,8 +661,20 @@ def get_reservation_status(
 )
 def occupy_bed_api(
     hospital_id: str,
-    patient_id: str
+    patient_id: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
+
+    if (
+        current_user["role"] == "HOSPITAL"
+        and current_user.get("hospital_id") != hospital_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to access this hospital resource."
+        )
 
     result = mark_bed_occupied(
         hospital_id=hospital_id,
@@ -622,8 +705,20 @@ def occupy_bed_api(
 )
 def confirm_reservation_api(
     hospital_id: str,
-    patient_id: str
+    patient_id: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
+
+    if (
+        current_user["role"] == "HOSPITAL"
+        and current_user.get("hospital_id") != hospital_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to access this hospital resource."
+        )
 
     inventory = get_hospital_inventory(
         hospital_id
@@ -669,8 +764,20 @@ def confirm_reservation_api(
 )
 def release_reservation_api(
     hospital_id: str,
-    patient_id: str
+    patient_id: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
+
+    if (
+        current_user["role"] == "HOSPITAL"
+        and current_user.get("hospital_id") != hospital_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to access this hospital resource."
+        )
 
     reservation = get_reservation(
         hospital_id,
@@ -727,12 +834,20 @@ def release_reservation_api(
 )
 def discharge_patient_api(
     hospital_id: str,
-    patient_id: str
+    patient_id: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
 
-    # ----------------------------------------
-    # Get hospital inventory
-    # ----------------------------------------
+    if (
+        current_user["role"] == "HOSPITAL"
+        and current_user.get("hospital_id") != hospital_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to access this hospital resource."
+        )
 
     inventory = get_hospital_inventory(
         hospital_id
@@ -745,19 +860,11 @@ def discharge_patient_api(
             detail="Hospital inventory not found."
         )
 
-    # ----------------------------------------
-    # Discharge patient
-    # ----------------------------------------
-
     result = discharge_patient(
         hospital_id=hospital_id,
         patient_id=patient_id,
         inventory=inventory,
     )
-
-    # ----------------------------------------
-    # Handle failure
-    # ----------------------------------------
 
     if not result["success"]:
 
@@ -765,10 +872,6 @@ def discharge_patient_api(
             status_code=400,
             detail=result
         )
-
-    # ----------------------------------------
-    # Return success response
-    # ----------------------------------------
 
     return {
         "success": True,
@@ -788,8 +891,33 @@ def discharge_patient_api(
 
 @app.get("/hospitals/{hospital_id}/inventory")
 def get_hospital_dashboard_inventory(
-    hospital_id: str
+    hospital_id: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
+    # ----------------------------------------
+    # Hospital users can access only their
+    # own hospital inventory
+    # ----------------------------------------
+
+    if (
+        current_user["role"] == "HOSPITAL"
+        and current_user.get("hospital_id")
+        != hospital_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "You are not authorized to access "
+                "this hospital inventory."
+            )
+        )
+
+    # ----------------------------------------
+    # Load inventory
+    # ----------------------------------------
+
     inventory = get_hospital_inventory(
         hospital_id
     )
@@ -1097,7 +1225,10 @@ def create_live_referral(
 
 @app.get("/referrals/{referral_id}")
 def get_live_referral(
-    referral_id: str
+    referral_id: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
     referral = get_referral(
         referral_id
@@ -1107,6 +1238,15 @@ def get_live_referral(
         raise HTTPException(
             status_code=404,
             detail="Referral not found."
+        )
+
+    if not can_view_referral(
+        current_user,
+        referral
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to view this referral."
         )
 
     return {
@@ -1171,8 +1311,14 @@ def get_hospital_referrals(
 @app.post("/referrals/{referral_id}/status/{new_status}")
 def update_live_referral_status(
     referral_id: str,
-    new_status: str
+    new_status: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
+
+    new_status = new_status.upper()
+
     allowed_statuses = [
         "ACCEPTED",
         "REJECTED",
@@ -1184,9 +1330,8 @@ def update_live_referral_status(
         "DIED",
     ]
 
-    new_status = new_status.upper()
-
     if new_status not in allowed_statuses:
+
         raise HTTPException(
             status_code=400,
             detail={
@@ -1197,12 +1342,92 @@ def update_live_referral_status(
             }
         )
 
+    # ----------------------------------------
+    # Get referral
+    # ----------------------------------------
+
+    referral = get_referral(
+        referral_id
+    )
+
+    if referral is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Referral not found."
+        )
+
+    # ----------------------------------------
+    # Authorization rules
+    # ----------------------------------------
+
+    role = current_user["role"]
+    hospital_id = current_user.get(
+        "hospital_id"
+    )
+
+    # Hospital users have limited permissions
+    if role == "HOSPITAL":
+
+        # Destination hospital:
+        # ACCEPTED or REJECTED
+        if new_status in [
+            "ACCEPTED",
+            "REJECTED"
+        ]:
+
+            if hospital_id != referral[
+                "to_hospital_id"
+            ]:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Only the destination hospital "
+                        "can accept or reject this referral."
+                    )
+                )
+
+        # Source hospital:
+        # IN_TRANSIT
+        elif new_status == "IN_TRANSIT":
+
+            if hospital_id != referral[
+                "from_hospital_id"
+            ]:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Only the source hospital can mark "
+                        "this referral as in transit."
+                    )
+                )
+
+        # Destination hospital:
+        # ARRIVED onwards
+        else:
+
+            if hospital_id != referral[
+                "to_hospital_id"
+            ]:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Only the destination hospital "
+                        "can update this referral status."
+                    )
+                )
+
+    # ----------------------------------------
+    # Update referral status
+    # ----------------------------------------
+
     result = update_referral_status(
         referral_id,
         new_status
     )
 
     if not result["success"]:
+
         status_code = (
             404
             if result["status"] == "NOT_FOUND"
@@ -1225,8 +1450,59 @@ def update_live_referral_status(
 def attach_referral_reservation(
     referral_id: str,
     hospital_id: str,
-    bed_type: str
+    bed_type: str,
+    current_user: dict = Depends(
+        require_current_user
+    ),
 ):
+
+        # ----------------------------------------
+    # Authorization
+    # ----------------------------------------
+
+    referral = get_referral(
+        referral_id
+    )
+
+    if referral is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Referral not found."
+        )
+
+    if current_user["role"] == "HOSPITAL":
+
+        if current_user.get(
+            "hospital_id"
+        ) != referral["to_hospital_id"]:
+
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Only the destination hospital can "
+                    "attach a bed reservation."
+                )
+            )
+
+    elif current_user["role"] not in [
+        "STATE_ADMIN",
+        "CENTRAL_ADMIN",
+    ]:
+
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to attach a reservation."
+        )
+
+    if hospital_id != referral["to_hospital_id"]:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Reservation can only be attached "
+                "to the destination hospital."
+            )
+        )
+
     bed_type = bed_type.upper()
 
     if bed_type not in [

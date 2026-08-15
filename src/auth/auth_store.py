@@ -82,6 +82,17 @@ def seed_default_users():
             "district": None,
             "created_at": datetime.now().isoformat(),
         },
+        {
+            "user_id": "USR000005",
+            "username": "gh_test_other",
+            "password": "hospital123",
+            "name": "Test Other Hospital",
+            "role": "HOSPITAL",
+            "hospital_id": "GH_TEST_OTHER",
+            "state": "Punjab",
+            "district": "Ludhiana",
+            "created_at": datetime.now().isoformat(),
+        },
     ]
 
     _save_users(default_users)
